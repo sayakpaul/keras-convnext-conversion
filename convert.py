@@ -155,10 +155,10 @@ def main(args):
 
     for m in range(num_stages):
         stage_name = model_name + f"_stage_{m}"
-        num_blocks = len(convnext_model_tf.get_layer(stage_name).layers)
+        num_blocks = model_config.depths[m]
 
         for i in range(num_blocks):
-            stage_block = convnext_model_tf.get_layer(stage_name).get_layer(
+            stage_block = convnext_model_tf.get_layer(
                 f"{stage_name}_block_{i}"
             )
             stage_prefix = f"stages.{m}.{i}"
