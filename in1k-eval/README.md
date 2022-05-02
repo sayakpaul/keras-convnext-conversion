@@ -17,3 +17,5 @@ The evaluation results can be found [here](https://tensorboard.dev/experiment/wG
 | convnext_base_21k_1k_224 | 85.8 | 85.364 |
 | convnext_large_21k_1k_224 | 86.6 | 86.36 |
 | convnext_xlarge_21k_1k_224 | 87.0 | 86.732 |
+
+`original acc@1` scores come from https://github.com/facebookresearch/ConvNeXt/.
