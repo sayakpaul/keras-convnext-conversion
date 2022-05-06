@@ -23,8 +23,7 @@ MODEL_TO_METHOD = {
     "convnext_large": convnext_pt.convnext_large,
     "convnext_xlarge": convnext_pt.convnext_xlarge,
 }
-# TF_MODEL_ROOT = "keras-applications/convnext"
-TF_MODEL_ROOT = "."
+TF_MODEL_ROOT = "keras-applications/convnext"
 
 
 def parse_args():
