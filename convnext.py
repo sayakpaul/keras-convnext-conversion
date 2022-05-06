@@ -404,7 +404,10 @@ def ConvNeXt(depths,
 
   x = inputs
   if include_preprocessing:
-    x = PreStem(name=model_name)(x)
+    channel_axis = 3 if backend.image_data_format() == "channels_last" else 1
+    num_channels = input_shape[channel_axis - 1]
+    if num_channels == 3:
+      x = PreStem(name=model_name)(x)
   
   # Stem block.
   stem = Sequential(
