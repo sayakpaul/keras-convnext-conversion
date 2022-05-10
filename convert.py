@@ -6,6 +6,7 @@ import torch
 from tensorflow.keras import layers
 
 import convnext_pt
+import convnext
 from convnext import ConvNeXt
 from model_configs import get_model_config
 
@@ -104,6 +105,7 @@ def main(args):
             p.numel() for p in convnext_model_pt.parameters()
         )
     print("TensorFlow model instantiated, populating pretrained weights...")
+    layer_names = {layer.name: layer for layer in convnext_model_tf.layers}
 
     # Fetch the pretrained parameters.
     param_list = list(convnext_model_pt.parameters())
@@ -125,7 +127,9 @@ def main(args):
 
     # Downsampling layers.
     for i in range(3):
-        downsampling_block = convnext_model_tf.get_layer(model_name + "_downsampling_block_" + str(i))
+        downsampling_block = convnext_model_tf.get_layer(
+            model_name + "_downsampling_block_" + str(i)
+        )
         pytorch_layer_prefix = f"downsample_layers.{i + 1}"
 
         for l in downsampling_block.layers:
@@ -158,12 +162,17 @@ def main(args):
         num_blocks = model_config.depths[m]
 
         for i in range(num_blocks):
-            stage_block = convnext_model_tf.get_layer(
-                f"{stage_name}_block_{i}"
+            # stage_block = convnext_model_tf.get_layer(
+            #     f"{stage_name}_block_{i}"
+            # )
+            stage_block = f"{stage_name}_block_{i}"
+            stage_block_layers = list(
+                filter(lambda x: stage_block in x, layer_names.keys())
             )
+            stage_block_layers = [layer_names[k] for k in stage_block_layers]
             stage_prefix = f"stages.{m}.{i}"
 
-            for j, layer in enumerate(stage_block.layers):
+            for j, layer in enumerate(stage_block_layers):
                 if isinstance(layer, layers.Conv2D):
                     layer.kernel.assign(
                         tf.Variable(
@@ -209,10 +218,10 @@ def main(args):
                     layer.beta.assign(
                         tf.Variable(model_states[f"{stage_prefix}.norm.bias"].numpy())
                     )
-
-            stage_block.gamma.assign(
-                tf.Variable(model_states[f"{stage_prefix}.gamma"].numpy())
-            )
+                elif isinstance(layer, convnext.LayerScale):
+                    layer.gamma.assign(
+                        tf.Variable(model_states[f"{stage_prefix}.gamma"].numpy())
+                    )
 
     # Final LayerNormalization layer and classifier head.
     if args["include_top"]:
@@ -230,7 +239,9 @@ def main(args):
             tf.Variable(model_states[state_list[-1]].numpy())
         )
     print("Weight population successful, serializing TensorFlow model...")
-    model_name = f"{model_name}_in21k" if args["dataset"] == "imagenet-21k" else model_name
+    model_name = (
+        f"{model_name}_in21k" if args["dataset"] == "imagenet-21k" else model_name
+    )
     model_name = f"{model_name}.h5" if args["include_top"] else f"{model_name}_notop.h5"
     save_path = os.path.join(TF_MODEL_ROOT, model_name)
     convnext_model_tf.save_weights(save_path)

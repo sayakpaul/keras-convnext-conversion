@@ -39,20 +39,20 @@ BASE_WEIGHTS_PATH = "https://storage.googleapis.com/convnext-tf/keras-applicatio
 
 WEIGHTS_HASHES = {
   "tiny":
-    ("594e0f8c77df6cdf30d07e92f19d530921a53ff8301edd130c1bb9ad3dd6f25b",
-      "278a5149e8c6e26f001051db5a8398f40f233994af2921a072bdca54389a9048"),
+    ("8ae6e78ce2933352b1ef4008e6dd2f17bc40771563877d156bc6426c7cf503ff",
+      "d547c096cabd03329d7be5562c5e14798aa39ed24b474157cef5e85ab9e49ef1"),
   "small":
-    ("8f26cee79fea02bbbbdc721e7dd5d416562106b7768ec37459850c7b23f26cb2",
-      "b0700a330b2e8bfa6862b61d333d3d8860e566ce2f9395a2165e506935bba547"),
+    ("ce1277d8f1ee5a0ef0e171469089c18f5233860ceaf9b168049cb9263fd7483c",
+      "6fc8009faa2f00c1c1dfce59feea9b0745eb260a7dd11bee65c8e20843da6eab"),
   "base":
-    ("2c08893b86245f4fc1d80f584faeb7431b23e895b03f71fc3d943a3489b60089",
-      "a3d12bf8938796ca00721db89cb9e5a1af77f847401348adef16fab3611233d3"),
+    ("52cbb006d3dadd03f6e095a8ca1aca47aecdd75acb4bc74bce1f5c695d0086e6",
+      "40a20c5548a5e9202f69735ecc06c990e6b7c9d2de39f0361e27baeb24cb7c45"),
   "large":
-    ("f17f979cc7cd23906a88f490ff1249d2b0dedc44a601f5700a0873afc1b0ad02",
-      "74ff1e5f6eee45c62194aaee4a3347d5e2cf574caccad414b2b117b3ad110b32"),
+    ("070c5ed9ed289581e477741d3b34beffa920db8cf590899d6d2c67fba2a198a6",
+      "40a20c5548a5e9202f69735ecc06c990e6b7c9d2de39f0361e27baeb24cb7c45"),
   "xlarge":
-    ("784b923c2db18fec883093b265c2a44c4fc401425f206a3ca036015290f401e8",
-      "ba28c90cf6a4c64acfe0ca3af3ad920652c50f24668a3aaaf245a1c47e7bfe6f"),
+    ("c1f5ccab661354fc3a79a10fa99af82f0fbf10ec65cb894a3ae0815f17a889ee",
+      "de3f8a54174130e0cecdc71583354753d557fcf1f4487331558e2a16ba0cfe05"),
 }
 
 
@@ -186,7 +186,39 @@ class StochasticDepth(layers.Layer):
     return config
 
 
-class ConvNeXtBlock(Model):
+class LayerScale(layers.Layer):
+  """Layer scale module.
+
+  Reference:
+    - hhttps://arxiv.org/abs/2103.17239
+
+  Args:
+    init_values (float): Initial value for layer scale. Should be within
+      [0, 1].
+    projection_dim (int): Projection dimensionality.
+  
+  Returns:
+    Tensor multiplied to the scale.
+
+  """
+  def __init__(self, init_values, projection_dim, **kwargs):
+    super().__init__(**kwargs)
+    self.init_values = init_values
+    self.projection_dim = projection_dim
+    self.gamma = tf.Variable(self.init_values * tf.ones((self.projection_dim,)))
+
+  def call(self, x):
+    return x * self.gamma
+
+  def get_config(self):
+    config = super().get_config()
+    config.update(
+      {"init_values": self.init_values, "projection_dim": self.projection_dim}
+    )
+    return config 
+
+def ConvNeXtBlock(projection_dim, drop_path_rate=0.0, 
+    layer_scale_init_value=1e-6, name=None):
   """ConvNeXt block.
   
   References:
@@ -206,60 +238,35 @@ class ConvNeXtBlock(Model):
       number.
 
   Returns:
-    A keras.Model instance.
+    Output tensor of the block.
   """
-  def __init__(self, projection_dim, drop_path_rate=0.0, 
-    layer_scale_init_value=1e-6, **kwargs):
-    super().__init__(**kwargs)
-    self.projection_dim = projection_dim
-    self.drop_path_rate = drop_path_rate
-    self.layer_scale_init_value = layer_scale_init_value
-    name = kwargs["name"]
-    
-    if layer_scale_init_value > 0.0:
-      self.gamma = tf.Variable(
-        layer_scale_init_value * tf.ones((projection_dim,)),
-        name=name + "_layer_scale_gamma")
-    else:
-      self.gamma = None
-    
-    self.depthwise_conv_1 = layers.Conv2D(
-      filters=projection_dim, kernel_size=7, padding="same",
-      groups=projection_dim, name=name + "_depthwise_conv")
-    self.layer_norm = layers.LayerNormalization(epsilon=1e-6, 
-      name=name + "_layernorm")
-    self.pointwise_conv_1 = layers.Dense(4 * projection_dim,
-      name=name + "_pointwise_conv_1")
-    self.act_fn = layers.Activation("gelu", name=name + "_gelu")
-    self.pointwise_conv_2 = layers.Dense(projection_dim, 
-      name=name + "_pointwise_conv_2")
-    self.drop_path = (
-      StochasticDepth(drop_path_rate, name=name + "_stochastic_depth")
-      if drop_path_rate > 0.0
-      else layers.Activation("linear", name=name + "_identity")
-    )
-
-  def call(self, inputs):
+  if name is None:
+    name = "prestem" + str(backend.get_uid("prestem"))
+  
+  def apply(inputs):
     x = inputs
-
-    x = self.depthwise_conv_1(x)
-    x = self.layer_norm(x)
-    x = self.pointwise_conv_1(x)
-    x = self.act_fn(x)
-    x = self.pointwise_conv_2(x)
-
-    if self.gamma is not None:
-      x = self.gamma * x
-
-    return inputs + self.drop_path(x)
-
-  def get_config(self):
-    config = {
-      "projection_dim": self.projection_dim,
-      "drop_path_rate": self.drop_path_rate,
-      "layer_scale_init_value": self.layer_scale_init_value,
-    }
-    return config
+    
+    x = layers.Conv2D(
+      filters=projection_dim, kernel_size=7, padding="same",
+      groups=projection_dim, name=name + "_depthwise_conv")(x)
+    x = layers.LayerNormalization(epsilon=1e-6, 
+      name=name + "_layernorm")(x)
+    x = layers.Dense(4 * projection_dim,
+      name=name + "_pointwise_conv_1")(x)
+    x = layers.Activation("gelu", name=name + "_gelu")(x)
+    x = layers.Dense(projection_dim, 
+      name=name + "_pointwise_conv_2")(x)
+    
+    if layer_scale_init_value is not None:
+      x = LayerScale(layer_scale_init_value, projection_dim,
+        name=name + "_layer_scale")(x)
+    if drop_path_rate:
+      layer = StochasticDepth(drop_path_rate, name=name + "_stochastic_depth")
+    else:
+      layer = layers.Activation("linear", name=name + "_identity")
+    
+    return inputs + layer(x)
+  return apply
 
 
 def PreStem(name=None):
