@@ -18,4 +18,8 @@ The evaluation results can be found [here](https://tensorboard.dev/experiment/wG
 | convnext_large_21k_1k_224 | 86.6 | 86.36 |
 | convnext_xlarge_21k_1k_224 | 87.0 | 86.732 |
 
-`original acc@1` scores come from https://github.com/facebookresearch/ConvNeXt/.
+`original acc@1` scores come from https://github.com/facebookresearch/ConvNeXt/
+
+## Acknowledgements
+
+* [ML-GDE](https://developers.google.com/programs/experts/) program for providing GCP credits that allowed me to run evaluation experiments.
