@@ -5,6 +5,12 @@ for more comments, setup guides, etc.
 
 The conversion was performed to aid this PR: https://github.com/keras-team/keras/pull/16421.
 
+**Updates**
+
+* The above-mentioned PR's been merged and that means it's now available inside TensorFlow
+(nightly) for now. Here's the official documentation: https://www.tensorflow.org/api_docs/python/tf/keras/applications/convnext.
+* Transfer learning code reference can be found [here](https://keras.io/guides/transfer_learning/).
+
 ## Execution
 
 1. Install the Python dependencies: `pip install -r requirements.txt`.
